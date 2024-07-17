@@ -4,7 +4,8 @@ import "./globals.css";
 import CartProvider from "./components/Providers";
 import Navbar from "./components/Navbar";
 import ShoppingCartModal from "./components/ShoppingCartModal";
-
+import Footer from "./components/Footer";
+import ThemeToggle from "./components/ToggleTheme";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -19,12 +20,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={inter.className}><div  className="container mx-auto px-4 sm:px-6 lg:px-8">
         <CartProvider>
           <Navbar />
+          <ThemeToggle/>
           <ShoppingCartModal />
           {children}
         </CartProvider>
+        <Footer/>
+        </div>
       </body>
     </html>
   );
