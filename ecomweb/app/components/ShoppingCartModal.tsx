@@ -1,14 +1,12 @@
 "use client";
+import { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import Image from 'next/image';
+import { useShoppingCart } from 'use-shopping-cart';
+import { loadStripe } from '@stripe/stripe-js';
 
-import Image from "next/image";
-import { useShoppingCart } from "use-shopping-cart";
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export default function ShoppingCartModal() {
   const {
@@ -18,22 +16,70 @@ export default function ShoppingCartModal() {
     cartDetails,
     removeItem,
     totalPrice,
-    redirectToCheckout,
   } = useShoppingCart();
+
+  useEffect(() => {
+    console.log("Cart modal state:", shouldDisplayCart);
+  }, [shouldDisplayCart]);
 
   async function handleCheckoutClick(event: any) {
     event.preventDefault();
+    console.log("Checkout button clicked");
+
     try {
-      const result = await redirectToCheckout();
-      if (result?.error) {
-        console.log("result");
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lineItems: Object.values(cartDetails ?? {}).map((item) => ({
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: item.name,
+                images: [item.image],
+              },
+              unit_amount: item.price * 100, // Stripe expects the price in cents
+            },
+            quantity: item.quantity,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create checkout session');
       }
-    } catch (error) {
-      console.log(error);
+
+      const data = await response.json();
+      const stripe = await stripePromise;
+
+      const { error } = await stripe!.redirectToCheckout({
+        sessionId: data.sessionId,
+      });
+
+      if (error) {
+        console.error('Stripe checkout error:', error.message);
+      } else {
+        console.log('Redirect to checkout successful');
+      }
+    } catch (error: any) {
+      console.error('Checkout exception:', error.message);
     }
   }
+
+  useEffect(() => {
+    console.log('ShoppingCart details:', {
+      cartCount,
+      shouldDisplayCart,
+      cartDetails,
+      totalPrice,
+    });
+  }, [cartCount, shouldDisplayCart, cartDetails, totalPrice]);
+
   return (
-    <Sheet open={shouldDisplayCart} onOpenChange={() => handleCartClick()}>
+    <Sheet open={shouldDisplayCart} onOpenChange={handleCartClick}>
       <SheetContent className="sm:max-w-lg w-[90vw]">
         <SheetHeader>
           <SheetTitle>Shopping Cart</SheetTitle>
@@ -43,7 +89,7 @@ export default function ShoppingCartModal() {
           <div className="mt-8 flex-1 overflow-y-auto">
             <ul className="-my-6 divide-y divide-gray-200">
               {cartCount === 0 ? (
-                <h1 className="py-6">You dont have any items</h1>
+                <h1 className="py-6">You don't have any items</h1>
               ) : (
                 <>
                   {Object.values(cartDetails ?? {}).map((entry) => (
@@ -74,7 +120,10 @@ export default function ShoppingCartModal() {
                           <div className="flex">
                             <button
                               type="button"
-                              onClick={() => removeItem(entry.id)}
+                              onClick={() => {
+                                console.log(`Remove item clicked for ID: ${entry.id}`);
+                                removeItem(entry.id);
+                              }}
                               className="font-medium text-primary hover:text-primary/80"
                             >
                               Remove
@@ -108,8 +157,8 @@ export default function ShoppingCartModal() {
               <p>
                 OR{" "}
                 <button
-                  onClick={() => handleCartClick()}
-                  className=" font-medium text-primary hover:text-primary/80"
+                  onClick={handleCartClick}
+                  className="font-medium text-primary hover:text-primary/80"
                 >
                   Continue Shopping
                 </button>
